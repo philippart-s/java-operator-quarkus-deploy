@@ -250,3 +250,99 @@ $ kubectl get pod,svc  -n test-java-operator
 
 No resources found in test-java-operator namespace.
 ```
+
+## 🐳 Packaging & déploiement dans K8s
+ - la branche `04-package-deploy` contient le résultat de cette étape
+ - arrêter le mode dev de Quarkus
+ - ajouter un fichier `src/main/kubernetes/kubernetes.yml` contenant la définition des _ClusterRole_ / _ClusterRoleBinding_ spécifiques à l'opérateur:
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+    name: service-deployment-cluster-role
+    namespace: java-operator-quarkus-deploy
+rules:
+  - apiGroups:
+    - ""
+    resources:
+    - secrets
+    - serviceaccounts
+    - services  
+    verbs:
+    - "*"
+  - apiGroups:
+    - "apps"
+    verbs:
+        - "*"
+    resources:
+    - deployments
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: service-deployment-cluster-role-binding
+  namespace: java-operator-quarkus-deploy
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: service-deployment-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: java-operator-quarkus-deploy-operator
+    namespace: java-operator-quarkus-deploy
+---
+```
+ - modifier le fichier `application.properties`:
+```propertie
+quarkus.container-image.build=true
+#quarkus.container-image.group=wilda
+quarkus.container-image.name=java-operator-quarkus-deploy-operator
+# set to true to automatically apply CRDs to the cluster when they get regenerated
+quarkus.operator-sdk.crd.apply=false
+# Kubernetes options
+quarkus.kubernetes.namespace=java-operator-quarkus-deploy
+```
+ - lancer le packaging : `mvn clean package`
+ - vérifier que l'image a bien été générée : 
+```bash
+$ docker images | grep java-operator-quarkus-deploy-operator
+
+wilda/java-operator-quarkus-deploy-operator    0.0.1-SNAPSHOT   988250eed234   12 seconds ago       412MB
+```
+ - push de l'image : `docker login` && `docker push wilda/java-operator-quarkus-deploy-operator:0.0.1-SNAPSHOT`
+ - créer le namespace `java-operator-quarkus-deploy`: `kubectl create ns java-operator-quarkus-deploy`
+ - appliquer le manifest créé : `kubectl apply -f ./target/kubernetes/kubernetes.yml`
+ - vérifier que tout va bien:
+```bash
+$ kubectl get pod -n java-operator-quarkus-deploy
+
+NAME                                             READY   STATUS    RESTARTS   AGE
+java-operator-quarkus-deploy-8b9cf6766-q6mns      1/1     Running   0          42s   
+```
+ - appliquer la CR de test : `kubectl apply -f ./src/test/resources/cr-test-deploy-quarkus.yml -n test-java-operator`
+ - vérifier que l'application a bien été déployée par l'opérateur :
+```bash
+$ kubectl get pod,svc  -n test-java-operator                                            
+
+NAME                                      READY   STATUS    RESTARTS   AGE
+pod/quarkus-deployment-5f8c85d587-g445p   1/1     Running   0          2m2s
+
+NAME                      TYPE       CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+service/quarkus-service   NodePort   XX.XX.XX.XXX   <none>        80:30080/TCP   51s
+```
+ - tester l'application déployée : 
+```bash
+$ curl http://ptgtl8.nodes.c1.gra7.k8s.ovh.net:30080/hello
+
+👋  Hello, World ! 🌍
+```
+ - supprimer la CR : `kubectl delete quarkusoperator/quarkus-app -n test-java-operator`
+ - vérifier que tout a été supprimé : 
+```bash
+$ kubectl get pod,svc  -n test-java-operator              
+
+No resources found in test-java-operator namespace.
+```
+ - supprimer l'opérateur : `kubectl delete -f ./target/kubernetes/kubernetes.yml`
+ - supprimer les namespaces: `kubectl delete ns test-java-operator java-operator-quarkus-deploy`
+ - supprimer la crd: `kubectl delete crds/quarkusoperators.wilda.fr`
