@@ -55,7 +55,7 @@ src
 ```properties
 quarkus.container-image.build=false
 #quarkus.container-image.group=
-quarkus.container-image.name=java-operator-samples-operator
+quarkus.container-image.name=java-operator-quarkus-deploy-operator
 # set to true to automatically apply CRDs to the cluster when they get regenerated
 quarkus.operator-sdk.crd.apply=false
 ```
