@@ -35,3 +35,36 @@ __  ____  __  _____   ___  __ ____  ______
 2023-02-10 13:55:54,800 INFO  [io.quarkus] (Quarkus Main Thread) Profile dev activated. Live Coding activated.
 2023-02-10 13:55:54,801 INFO  [io.quarkus] (Quarkus Main Thread) Installed features: [cdi, kubernetes, kubernetes-client, micrometer, openshift-client, operator-sdk, smallrye-context-propagation, smallrye-health, vertx]
 ```
+
+## 📄 CRD generation
+ - la branche `02-crd-generation` contient le résultat de cette étape
+ - création de l'API : `operator-sdk create api --version v1 --kind QuarkusOperator`
+ - cette commande a créé les 4 classes nécessaires pour créer l'opérateur:
+```bash
+src
+└── main
+    ├── java
+    │   └── fr
+    │       └── wilda
+    │           ├── QuarkusOperator.java
+    │           ├── QuarkusOperatorReconciler.java
+    │           ├── QuarkusOperatorSpec.java
+    │           └── QuarkusOperatorStatus.java
+```
+  - désactiver, pour l'instant, la création de l'image :
+```properties
+quarkus.container-image.build=false
+#quarkus.container-image.group=
+quarkus.container-image.name=java-operator-samples-operator
+# set to true to automatically apply CRDs to the cluster when they get regenerated
+quarkus.operator-sdk.crd.apply=false
+```
+  - tester que tout compile que la CRD se génère bien: `mvn clean package` (ou restez en mode `mvn quarkus:dev` pour voir la magie opérer en direct :wink:)
+  - la CRD doit être générée dans le target, `target/kubernetes/quarkusoperators.wilda.fr-v1.yml`:
+  - elle doit aussi être installée sur le cluster:
+```bash
+$ kubectl get crds quarkusoperators.wilda.fr
+NAME                        CREATED AT
+
+quarkusoperators.wilda.fr   2022-08-26T15:40:19Z
+```
