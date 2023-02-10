@@ -1,0 +1,7 @@
+apiVersion: "wilda.fr/v1"
+kind: QuarkusOperator
+metadata:
+  name: quarkus-app
+spec:
+  version: "1.0.0"
+  nodePort: 30080

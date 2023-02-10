@@ -68,3 +68,185 @@ NAME                        CREATED AT
 
 quarkusoperators.wilda.fr   2022-08-26T15:40:19Z
 ```
+
+## 👋 Hello, World!
+ - la branche `03-hello-world` contient le résultat de cette étape
+ - modifier la partie _spec_ de la CRD en modifiant la classe `QuarkusOperatorSpec` :
+```java
+public class QuarkusOperatorSpec {
+
+    private String version;
+    private int nodePort;
+    public String getVersion() {
+        return version;
+    }
+    public void setVersion(String version) {
+        this.version = version;
+    }
+    public int getNodePort() {
+        return nodePort;
+    }
+    public void setNodePort(int nodePort) {
+        this.nodePort = nodePort;
+    }
+}
+```
+ - modifier le reconciler `QuarkusOperatorReconciler.java` : 
+```java
+public class QuarkusOperatorReconciler
+    implements Reconciler<QuarkusOperator>, Cleaner<QuarkusOperator> {
+  private static final Logger log = LoggerFactory.getLogger(QuarkusOperatorReconciler.class);
+  private final KubernetesClient client;
+
+  public QuarkusOperatorReconciler(KubernetesClient client) {
+    this.client = client;
+  }
+
+  @Override
+  public UpdateControl<QuarkusOperator> reconcile(QuarkusOperator resource, Context context) {
+    log.info("⚡️ Event occurs ! Reconcile called.");
+
+    String namespace = resource.getMetadata().getNamespace();
+
+    // Create Deployment
+    log.info("🚀 Deploy the application!");
+    Deployment deployment = makeDeployment(resource);
+    client.apps().deployments().inNamespace(namespace).createOrReplace(deployment);
+
+    // Create service
+    log.info("✨ Create the service!");
+    Service service = makeService(resource);
+    Service existingService = client.services().inNamespace(resource.getMetadata().getNamespace())
+        .withName(service.getMetadata().getName()).get();
+    if (existingService == null) {
+      client.services().inNamespace(namespace).createOrReplace(service);
+    }
+
+
+    return UpdateControl.noUpdate();
+  }
+
+  @Override
+  public DeleteControl cleanup(QuarkusOperator resource, Context<QuarkusOperator> context) {
+    log.info("🗑 Undeploy the application");
+
+    return DeleteControl.defaultDelete();
+  }
+
+  /**
+   * Generate the Kubernetes deployment resource.
+   * 
+   * @param resource The created custom resource
+   * @return The created deployment
+   */
+  private Deployment makeDeployment(QuarkusOperator resource) {
+    Deployment deployment = new DeploymentBuilder()
+    .withNewMetadata()
+      .withName("quarkus-deployment")
+      .addToLabels("app", "quarkus")
+    .endMetadata()
+    .withNewSpec()
+      .withReplicas(1)
+      .withNewSelector()
+        .withMatchLabels(Map.of("app", "quarkus"))
+      .endSelector()
+      .withNewTemplate()
+        .withNewMetadata()
+          .addToLabels("app", "quarkus")
+        .endMetadata()
+        .withNewSpec()
+          .addNewContainer()
+            .withName("quarkus")
+            .withImage("wilda/hello-world-from-quarkus:" + resource.getSpec().getVersion())
+            .addNewPort()
+              .withContainerPort(80)
+            .endPort()
+          .endContainer()
+        .endSpec()
+      .endTemplate()
+    .endSpec()
+    .build();
+
+    deployment.addOwnerReference(resource);
+
+    try {
+      log.info("Generated deployment {}", SerializationUtils.dumpAsYaml(deployment));
+    } catch (JsonProcessingException e) {
+      log.error("Unable to get YML");
+      e.printStackTrace();
+    }
+
+    return deployment;
+  }
+
+  /**
+   * Generate the Kubernetes service resource.
+   * 
+   * @param resource The custom resource
+   * @return The service.
+   */
+  private Service makeService(QuarkusOperator resource) {
+    Service service = new ServiceBuilder()
+    .withNewMetadata()
+      .withName("quarkus-service")
+      .addToLabels("app", "quarkus")
+    .endMetadata()
+    .withNewSpec()
+      .withType("NodePort")
+      .withSelector(Map.of("app", "quarkus"))
+      .addNewPort()
+        .withPort(80)
+        .withTargetPort(new IntOrString(8080))
+        .withNodePort(resource.getSpec().getNodePort())
+      .endPort()
+    .endSpec()
+    .build();
+
+    service.addOwnerReference(resource);
+
+    try {
+      log.info("Generated service {}", SerializationUtils.dumpAsYaml(service));
+    } catch (JsonProcessingException e) {
+      log.error("Unable to get YML");
+      e.printStackTrace();
+    }
+
+    return service;
+  }
+}
+```
+ - créer la CR de tests `./src/test/resources/cr-test-deploy-quarkus.yml`: 
+```yaml
+apiVersion: "wilda.fr/v1"
+kind: QuarkusOperator
+metadata:
+  name: quarkus-app
+spec:
+  version: "1.0.0"
+  nodePort: 30080
+```
+ - créer le namespace `test-java-operator` : `kubectl create ns test-java-operator`
+ - appliquer la CR : `kubectl apply -f ./src/test/resources/cr-test-deploy-quarkus.yml -n test-java-operator`
+ - vérifier que l'application a bien été déployée par l'opérateur :
+```bash
+$ kubectl get pod,svc  -n test-java-operator                                            
+
+NAME                                      READY   STATUS    RESTARTS   AGE
+pod/quarkus-deployment-5f8c85d587-g445p   1/1     Running   0          2m2s
+
+NAME                      TYPE       CLUSTER-IP    EXTERNAL-IP   PORT(S)        AGE
+service/quarkus-service   NodePort   XX.XX.XX.XXX   <none>        80:30080/TCP   51s
+```
+ - tester l'application déployée : 
+```bash
+$ curl http://ptgtl8.nodes.c1.gra7.k8s.ovh.net:30080/hello
+
+👋  Hello, World ! 🌍
+```
+ - supprimer la CR : `kubectl delete quarkusoperator/quarkus-app -n test-java-operator`
+ - vérifier que tout a été supprimé : 
+```bash
+$ kubectl get pod,svc  -n test-java-operator              
+
+No resources found in test-java-operator namespace.
+```
