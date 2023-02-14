@@ -295,7 +295,7 @@ subjects:
  - modifier le fichier `application.properties`:
 ```propertie
 quarkus.container-image.build=true
-#quarkus.container-image.group=wilda
+quarkus.container-image.group=wilda
 quarkus.container-image.name=java-operator-quarkus-deploy-operator
 # set to true to automatically apply CRDs to the cluster when they get regenerated
 quarkus.operator-sdk.crd.apply=false
