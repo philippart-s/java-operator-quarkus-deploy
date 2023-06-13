@@ -26,14 +26,13 @@ __  ____  __  _____   ___  __ ____  ______
  --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
  -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
 --\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
-2023-02-10 13:55:54,283 WARN  [io.fab.kub.cli.Config] (Quarkus Main Thread) Found multiple Kubernetes config files [[/home/ubuntu/config/k8s/knative.yml, /home/ubuntu/config/k8s/kubeconfig-example2.yml]], using the first one: [/home/ubuntu/config/k8s/knative.yml]. If not desired file, please change it by doing `export KUBECONFIG=/path/to/kubeconfig` on Unix systems or `$Env:KUBECONFIG=/path/to/kubeconfig` on Windows.
+2023-06-13 15:33:52,746 INFO  [io.qua.ope.run.ConfigurationServiceRecorder] (Quarkus Main Thread) Leader election deactivated for dev profile
 
-2023-02-10 13:55:54,426 WARN  [io.fab.kub.cli.Config] (Quarkus Main Thread) Found multiple Kubernetes config files [[/home/ubuntu/config/k8s/knative.yml, /home/ubuntu/config/k8s/kubeconfig-example2.yml]], using the first one: [/home/ubuntu/config/k8s/knative.yml]. If not desired file, please change it by doing `export KUBECONFIG=/path/to/kubeconfig` on Unix systems or `$Env:KUBECONFIG=/path/to/kubeconfig` on Windows.
-2023-02-10 13:55:54,667 INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Quarkus Java Operator SDK extension 4.0.3 (commit: d88d41d on branch: d88d41d78baf198fa4e69d1205f9d19ee04d8c60) built on Thu Oct 06 20:26:39 UTC 2022
-2023-02-10 13:55:54,674 WARN  [io.qua.ope.run.AppEventListener] (Quarkus Main Thread) No Reconciler implementation was found so the Operator was not started.
-2023-02-10 13:55:54,795 INFO  [io.quarkus] (Quarkus Main Thread) java-operator-quarkus-deploy 0.0.1-SNAPSHOT on JVM (powered by Quarkus 2.13.1.Final) started in 5.591s. Listening on: http://localhost:8080
-2023-02-10 13:55:54,800 INFO  [io.quarkus] (Quarkus Main Thread) Profile dev activated. Live Coding activated.
-2023-02-10 13:55:54,801 INFO  [io.quarkus] (Quarkus Main Thread) Installed features: [cdi, kubernetes, kubernetes-client, micrometer, openshift-client, operator-sdk, smallrye-context-propagation, smallrye-health, vertx]
+2023-06-13 15:33:53,615 INFO  [io.qua.ope.run.OperatorProducer] (Quarkus Main Thread) Quarkus Java Operator SDK extension 5.1.0 (commit: 232db56 on branch: 232db566edf4120b3dc7d5ec724104d5336b8e23) built on Thu Feb 23 15:42:39 UTC 2023
+2023-06-13 15:33:53,621 WARN  [io.qua.ope.run.AppEventListener] (Quarkus Main Thread) No Reconciler implementation was found so the Operator was not started.
+2023-06-13 15:33:53,755 INFO  [io.quarkus] (Quarkus Main Thread) java-operator-quarkus-deploy 0.0.1-SNAPSHOT on JVM (powered by Quarkus 2.16.3.Final) started in 8.738s. Listening on: http://localhost:8080
+2023-06-13 15:33:53,758 INFO  [io.quarkus] (Quarkus Main Thread) Profile dev activated. Live Coding activated.
+2023-06-13 15:33:53,759 INFO  [io.quarkus] (Quarkus Main Thread) Installed features: [cdi, kubernetes, kubernetes-client, micrometer, openshift-client, operator-sdk, smallrye-context-propagation, smallrye-health, vertx]
 ```
 
 ## 📄 CRD generation
@@ -111,7 +110,7 @@ public class QuarkusOperatorReconciler
     // Create Deployment
     log.info("🚀 Deploy the application!");
     Deployment deployment = makeDeployment(resource);
-    client.apps().deployments().inNamespace(namespace).createOrReplace(deployment);
+    client.apps().deployments().inNamespace(namespace).resource(deployment).create();
 
     // Create service
     log.info("✨ Create the service!");
@@ -119,7 +118,7 @@ public class QuarkusOperatorReconciler
     Service existingService = client.services().inNamespace(resource.getMetadata().getNamespace())
         .withName(service.getMetadata().getName()).get();
     if (existingService == null) {
-      client.services().inNamespace(namespace).createOrReplace(service);
+      client.services().inNamespace(namespace).resource(service).create();
     }
 
 
@@ -169,12 +168,7 @@ public class QuarkusOperatorReconciler
 
     deployment.addOwnerReference(resource);
 
-    try {
-      log.info("Generated deployment {}", SerializationUtils.dumpAsYaml(deployment));
-    } catch (JsonProcessingException e) {
-      log.error("Unable to get YML");
-      e.printStackTrace();
-    }
+    log.info("Generated deployment {}", Serialization.asYaml(deployment));
 
     return deployment;
   }
@@ -204,12 +198,7 @@ public class QuarkusOperatorReconciler
 
     service.addOwnerReference(resource);
 
-    try {
-      log.info("Generated service {}", SerializationUtils.dumpAsYaml(service));
-    } catch (JsonProcessingException e) {
-      log.error("Unable to get YML");
-      e.printStackTrace();
-    }
+    log.info("Generated service {}", Serialization.asYaml(service));
 
     return service;
   }
@@ -239,7 +228,7 @@ service/quarkus-service   NodePort   XX.XX.XX.XXX   <none>        80:30080/TCP  
 ```
  - tester l'application déployée : 
 ```bash
-$ curl http://ptgtl8.nodes.c1.gra7.k8s.ovh.net:30080/hello
+$ curl http://<cluster node URL>:30080/hello
 
 👋  Hello, World ! 🌍
 ```
@@ -298,9 +287,16 @@ quarkus.container-image.build=true
 quarkus.container-image.group=wilda
 quarkus.container-image.name=java-operator-quarkus-deploy-operator
 # set to true to automatically apply CRDs to the cluster when they get regenerated
-quarkus.operator-sdk.crd.apply=false
+quarkus.operator-sdk.crd.apply=true
 # Kubernetes options
 quarkus.kubernetes.namespace=java-operator-quarkus-deploy
+```
+ - mettre à jour le pom.xml ave cla dépendance `jib`: 
+```xml
+<dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-container-image-jib</artifactId>
+</dependency>    
 ```
  - lancer le packaging : `mvn clean package`
  - vérifier que l'image a bien été générée : 
@@ -332,7 +328,7 @@ service/quarkus-service   NodePort   XX.XX.XX.XXX   <none>        80:30080/TCP  
 ```
  - tester l'application déployée : 
 ```bash
-$ curl http://ptgtl8.nodes.c1.gra7.k8s.ovh.net:30080/hello
+$ curl http://<cluster node URL>:30080/hello
 
 👋  Hello, World ! 🌍
 ```
