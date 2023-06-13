@@ -110,7 +110,7 @@ public class QuarkusOperatorReconciler
     // Create Deployment
     log.info("🚀 Deploy the application!");
     Deployment deployment = makeDeployment(resource);
-    client.apps().deployments().inNamespace(namespace).createOrReplace(deployment);
+    client.apps().deployments().inNamespace(namespace).resource(deployment).create();
 
     // Create service
     log.info("✨ Create the service!");
@@ -118,7 +118,7 @@ public class QuarkusOperatorReconciler
     Service existingService = client.services().inNamespace(resource.getMetadata().getNamespace())
         .withName(service.getMetadata().getName()).get();
     if (existingService == null) {
-      client.services().inNamespace(namespace).createOrReplace(service);
+      client.services().inNamespace(namespace).resource(service).create();
     }
 
 
@@ -168,12 +168,7 @@ public class QuarkusOperatorReconciler
 
     deployment.addOwnerReference(resource);
 
-    try {
-      log.info("Generated deployment {}", SerializationUtils.dumpAsYaml(deployment));
-    } catch (JsonProcessingException e) {
-      log.error("Unable to get YML");
-      e.printStackTrace();
-    }
+    log.info("Generated deployment {}", Serialization.asYaml(deployment));
 
     return deployment;
   }
@@ -203,12 +198,7 @@ public class QuarkusOperatorReconciler
 
     service.addOwnerReference(resource);
 
-    try {
-      log.info("Generated service {}", SerializationUtils.dumpAsYaml(service));
-    } catch (JsonProcessingException e) {
-      log.error("Unable to get YML");
-      e.printStackTrace();
-    }
+    log.info("Generated service {}", Serialization.asYaml(service));
 
     return service;
   }
@@ -238,7 +228,7 @@ service/quarkus-service   NodePort   XX.XX.XX.XXX   <none>        80:30080/TCP  
 ```
  - tester l'application déployée : 
 ```bash
-$ curl http://ptgtl8.nodes.c1.gra7.k8s.ovh.net:30080/hello
+$ curl http://<cluster node URL>:30080/hello
 
 👋  Hello, World ! 🌍
 ```

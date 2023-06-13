@@ -3,14 +3,13 @@ package fr.wilda;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.internal.SerializationUtils;
+import io.fabric8.kubernetes.client.utils.Serialization;
 import io.javaoperatorsdk.operator.api.reconciler.Cleaner;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.DeleteControl;
@@ -35,7 +34,7 @@ public class QuarkusOperatorReconciler
     // Create Deployment
     log.info("🚀 Deploy the application!");
     Deployment deployment = makeDeployment(resource);
-    client.apps().deployments().inNamespace(namespace).createOrReplace(deployment);
+    client.apps().deployments().inNamespace(namespace).resource(deployment).create();
 
     // Create service
     log.info("✨ Create the service!");
@@ -43,7 +42,7 @@ public class QuarkusOperatorReconciler
     Service existingService = client.services().inNamespace(resource.getMetadata().getNamespace())
         .withName(service.getMetadata().getName()).get();
     if (existingService == null) {
-      client.services().inNamespace(namespace).createOrReplace(service);
+      client.services().inNamespace(namespace).resource(service).create();
     }
 
 
@@ -93,12 +92,7 @@ public class QuarkusOperatorReconciler
 
     deployment.addOwnerReference(resource);
 
-    try {
-      log.info("Generated deployment {}", SerializationUtils.dumpAsYaml(deployment));
-    } catch (JsonProcessingException e) {
-      log.error("Unable to get YML");
-      e.printStackTrace();
-    }
+    log.info("Generated deployment {}", Serialization.asYaml(deployment));
 
     return deployment;
   }
@@ -128,12 +122,7 @@ public class QuarkusOperatorReconciler
 
     service.addOwnerReference(resource);
 
-    try {
-      log.info("Generated service {}", SerializationUtils.dumpAsYaml(service));
-    } catch (JsonProcessingException e) {
-      log.error("Unable to get YML");
-      e.printStackTrace();
-    }
+    log.info("Generated service {}", Serialization.asYaml(service));
 
     return service;
   }
